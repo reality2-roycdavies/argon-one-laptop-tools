@@ -47,8 +47,18 @@ if [ -f "$ARGON_FILE" ]; then
     fi
     cp "$SCRIPT_DIR/argonpowerbutton.py.modified" "$ARGON_FILE"
     chmod 644 "$ARGON_FILE"
+    echo "  -> Patched lid handler"
+
+    # Disable the desktop icon that argononeupd keeps recreating
+    ARGON_UPD="/etc/argon/argononeupd.py"
+    if [ -f "$ARGON_UPD" ] && ! grep -q "Disabled: using Plasma applet" "$ARGON_UPD"; then
+        sed -i '/^def updatedesktopicon/a\\treturn  # Disabled: using Plasma applet instead' "$ARGON_UPD"
+        echo "  -> Disabled desktop icon in argononeupd"
+    fi
+    rm -f /home/*/Desktop/argononeup.desktop 2>/dev/null
+
     systemctl restart argononeupd.service
-    echo "  -> Patched and restarted argononeupd"
+    echo "  -> Restarted argononeupd"
 else
     echo "  -> WARNING: $ARGON_FILE not found. Argon One software not installed?"
 fi
