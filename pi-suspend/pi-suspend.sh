@@ -71,8 +71,12 @@ suspend() {
     find_drm_outputs
 
     # --- Lock screen ---
-    run_as_user loginctl lock-session
-    sleep 0.5
+    local session_id
+    session_id=$(loginctl list-sessions --no-legend | awk -v user="$DESKTOP_USER" '$3 == user && $6 == "user" {print $1; exit}')
+    if [ -n "$session_id" ]; then
+        loginctl lock-session "$session_id"
+        sleep 0.5
+    fi
 
     # --- Display off ---
     for output in "${DRM_OUTPUTS[@]}"; do
