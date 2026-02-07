@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Argon Battery Tray
+Comment=Battery level indicator for Argon UPS
+Exec=python3 /home/roycdavies/.local/bin/argon-battery-tray.py
+Icon=battery
+Terminal=false
+Categories=System;Monitor;
+X-KDE-autostart-after=panel
