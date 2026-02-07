@@ -16,6 +16,9 @@ find_desktop_user() {
         local stype
         stype=$(loginctl show-session "$session" -p Type --value 2>/dev/null)
         if [ "$stype" = "wayland" ] || [ "$stype" = "x11" ]; then
+            local sclass
+            sclass=$(loginctl show-session "$session" -p Class --value 2>/dev/null)
+            [ "$sclass" = "greeter" ] && continue
             DESKTOP_USER=$(loginctl show-session "$session" -p Name --value 2>/dev/null)
             break
         fi
@@ -75,7 +78,10 @@ suspend() {
     session_id=$(loginctl list-sessions --no-legend | awk -v user="$DESKTOP_USER" '$3 == user && $6 == "user" {print $1; exit}')
     if [ -n "$session_id" ]; then
         loginctl lock-session "$session_id"
+        logger -t pi-suspend "Locked session $session_id"
         sleep 0.5
+    else
+        logger -t pi-suspend "No session found for user '$DESKTOP_USER'"
     fi
 
     # --- Display off ---
