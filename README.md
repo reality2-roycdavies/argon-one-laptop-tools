@@ -67,31 +67,41 @@ sudo ./uninstall.sh
 
 - USB 3.0 ports on the Pi 5 do not support hardware power switching. Devices on USB 3.0 will be de-authorized (no communication) but may still draw bus power. Move devices to USB 2.0 ports if full power cutoff is needed.
 
-## Battery Tray
+## Plasma Applet (Argon Battery)
 
-A KDE system tray indicator that displays battery level from the Argon One UPS. Reads status from the `argononeupd` daemon and shows the appropriate charge/discharge icon using PyQt6.
+A native KDE Plasma 6 panel widget that displays battery status and system information from the Argon One UPS. Click the battery icon to see:
+
+- Battery status and percentage
+- IP address
+- CPU temperature
+- RAM usage
+- Per-core CPU usage
+- Storage usage
 
 ### Prerequisites
 
-- KDE Plasma desktop
+- KDE Plasma 6 desktop on Wayland
 - Argon One UPS with `argononeupd` service running
-- Python 3 with PyQt6:
-  ```bash
-  sudo apt install python3-pyqt6
-  ```
+- Python 3
 
 ### Install
 
 ```bash
-cd battery-tray
+cd plasma-applet
 ./install.sh
 ```
 
-The indicator will start automatically on next login. To start immediately:
+Then right-click on your panel, click **Add Widgets...**, search for **Argon Battery**, and drag it to the panel.
 
-```bash
-python3 ~/.local/bin/argon-battery-tray.py &
-```
+After adding the widget, go to **Configure System Tray... -> Entries** and disable the built-in **Argon Battery** entry under Hardware Control to avoid a duplicate icon.
+
+### Upgrade
+
+Re-run `./install.sh` — it will upgrade the existing plasmoid in place.
+
+## Battery Tray (legacy)
+
+The `battery-tray/` directory contains an older PyQt6-based system tray indicator. This has been superseded by the Plasma applet above, which integrates natively with the panel and correctly positions its popup on Wayland.
 
 ## License
 
