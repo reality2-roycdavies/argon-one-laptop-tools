@@ -1,0 +1,20 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Roy C. Davies"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "Battery and system monitor for the Argon One Pi laptop",
+        "EnabledByDefault": true,
+        "FormFactors": ["desktop"],
+        "Icon": "battery-full",
+        "Id": "org.argon.battery",
+        "License": "GPL-2.0+",
+        "Name": "Argon Battery"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-NotificationAreaCategory": "Hardware"
+}
