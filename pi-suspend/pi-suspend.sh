@@ -70,6 +70,10 @@ suspend() {
     find_desktop_user
     find_drm_outputs
 
+    # --- Lock screen ---
+    run_as_user loginctl lock-session
+    sleep 0.5
+
     # --- Display off ---
     for output in "${DRM_OUTPUTS[@]}"; do
         run_as_user wlr-randr --output "$output" --off
