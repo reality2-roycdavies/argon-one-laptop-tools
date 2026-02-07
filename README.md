@@ -1,6 +1,8 @@
 # Argon One Pi 5 Laptop Utilities
 
-Utilities for the Raspberry Pi 5 in an Argon One laptop case, providing fake suspend/resume on lid close and a battery level system tray indicator.
+Utilities for the Raspberry Pi 5 in an Argon One laptop case running KDE Plasma on Wayland, providing fake suspend/resume on lid close and a KDE system tray battery indicator.
+
+Tested on Raspberry Pi OS (Bookworm) with KDE Plasma desktop.
 
 ## Pi Suspend
 
@@ -19,7 +21,8 @@ On lid open, everything is restored.
 
 - Raspberry Pi 5 (or CM5) in an Argon One case
 - Argon One software installed (`argononeupd` service)
-- Raspberry Pi OS (Bookworm) with Wayland/KDE
+- Raspberry Pi OS (Bookworm) with KDE Plasma on Wayland
+- `wlr-randr` (for display control under Wayland)
 - `uhubctl` — installed automatically if not present:
   ```bash
   sudo apt install uhubctl
@@ -66,10 +69,11 @@ sudo ./uninstall.sh
 
 ## Battery Tray
 
-A KDE system tray indicator that displays battery level from the Argon One UPS. Reads status from the `argononeupd` daemon and shows the appropriate charge/discharge icon.
+A KDE system tray indicator that displays battery level from the Argon One UPS. Reads status from the `argononeupd` daemon and shows the appropriate charge/discharge icon using PyQt6.
 
 ### Prerequisites
 
+- KDE Plasma desktop
 - Argon One UPS with `argononeupd` service running
 - Python 3 with PyQt6:
   ```bash
