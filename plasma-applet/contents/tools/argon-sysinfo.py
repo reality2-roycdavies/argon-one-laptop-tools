@@ -15,6 +15,13 @@ CPU_PREV_FILE = "/dev/shm/argon-cpu-prev"
 STATUS_RE = re.compile(r"Power:(Battery|Charging|Charged)\s+(\d+)%")
 
 
+BATTERY_I2C_BUS = 1
+BATTERY_I2C_ADDR = 0x64
+CURRENT_HIGH_REG = 0x0E
+CURRENT_LOW_REG = 0x0F
+R_SENSE = 10.0
+
+
 def read_battery():
     try:
         with open(LOG_FILE) as f:
@@ -24,6 +31,23 @@ def read_battery():
     except (OSError, IOError):
         pass
     return None, None
+
+
+def read_battery_current():
+    """Read battery current from the UPS fuel gauge via I2C.
+
+    Returns current in mA (negative = discharging, positive = charging).
+    """
+    try:
+        import smbus2
+        bus = smbus2.SMBus(BATTERY_I2C_BUS)
+        high = bus.read_byte_data(BATTERY_I2C_ADDR, CURRENT_HIGH_REG)
+        low = bus.read_byte_data(BATTERY_I2C_ADDR, CURRENT_LOW_REG)
+        bus.close()
+        raw = int.from_bytes([high, low], byteorder='big', signed=True)
+        return round((52.4 * raw) / (32768 * R_SENSE), 1)
+    except Exception:
+        return None
 
 
 def read_cpu_temp():
@@ -163,6 +187,7 @@ def main():
     info = {
         "battery_status": bat_status,
         "battery_percent": bat_percent if bat_percent is not None else 0,
+        "battery_current": read_battery_current(),
         "cpu_temp": read_cpu_temp(),
         "ram_percent": None,
         "ram_total": None,

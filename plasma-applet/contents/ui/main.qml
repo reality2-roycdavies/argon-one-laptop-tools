@@ -35,7 +35,7 @@ PlasmoidItem {
         id: infoSource
         engine: "executable"
         connectedSources: ["python3 '" + root.helperPath + "'"]
-        interval: 5000
+        interval: 1000
         onNewData: function(source, data) {
             if (data["exit code"] == 0 && data["stdout"].length > 0) {
                 try {
@@ -106,6 +106,20 @@ PlasmoidItem {
                     if (s === "Battery" && p <= 20) return Kirigami.Theme.negativeTextColor
                     if (s === "Battery" && p <= 50) return Kirigami.Theme.neutralTextColor
                     return Kirigami.Theme.textColor
+                }
+            }
+        }
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.leftMargin: Kirigami.Units.largeSpacing
+            Layout.rightMargin: Kirigami.Units.smallSpacing
+            PlasmaComponents.Label { text: "Current"; Layout.fillWidth: true }
+            PlasmaComponents.Label {
+                text: {
+                    if (!root.hasData || root.sysInfo.battery_current == null) return "N/A"
+                    var mA = root.sysInfo.battery_current
+                    if (mA < 0) return Math.abs(mA) + " mA (drain)"
+                    return mA + " mA (charge)"
                 }
             }
         }
