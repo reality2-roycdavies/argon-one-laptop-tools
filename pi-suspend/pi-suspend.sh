@@ -93,9 +93,35 @@ suspend() {
         [ -f "$bl" ] && echo 1 > "$bl"
     done
 
-    # --- CPU to minimum ---
+    # --- CPU: offline cores 1-3, cap core 0 at minimum ---
+    for cpu in /sys/devices/system/cpu/cpu[1-9]*/online; do
+        [ -f "$cpu" ] && echo 0 > "$cpu"
+    done
     for gov in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
         [ -f "$gov" ] && echo powersave > "$gov"
+    done
+    local min_freq
+    min_freq=$(cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq 2>/dev/null || echo 1500000)
+    for maxf in /sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq; do
+        [ -f "$maxf" ] && echo "$min_freq" > "$maxf"
+    done
+    logger -t pi-suspend "CPU: 3 cores offline, core 0 capped at ${min_freq}kHz"
+
+    # --- LEDs off ---
+    for led in /sys/class/leds/ACT /sys/class/leds/PWR; do
+        if [ -d "$led" ]; then
+            cat "$led/trigger" | grep -oP '\[\K[^\]]+' > /run/pi-suspend-led-$(basename "$led") 2>/dev/null
+            echo none > "$led/trigger"
+            echo 0 > "$led/brightness"
+        fi
+    done
+
+    # --- Ethernet down ---
+    ip link set eth0 down 2>/dev/null
+
+    # --- NVMe low power ---
+    for ctrl in /sys/bus/nvme/devices/nvme*/power; do
+        [ -d "$ctrl" ] && echo auto > "$ctrl/control" 2>/dev/null
     done
 
     # --- Bring down all wifi interfaces then rfkill ---
@@ -161,6 +187,24 @@ resume() {
     logger -t pi-suspend "USB devices restored"
     sleep 2  # give USB devices time to re-enumerate
 
+    # --- NVMe resume ---
+    for ctrl in /sys/bus/nvme/devices/nvme*/power; do
+        [ -d "$ctrl" ] && echo on > "$ctrl/control" 2>/dev/null
+    done
+
+    # --- Ethernet up ---
+    ip link set eth0 up 2>/dev/null
+
+    # --- LEDs restore ---
+    for led in /sys/class/leds/ACT /sys/class/leds/PWR; do
+        local lname=$(basename "$led")
+        if [ -f "/run/pi-suspend-led-$lname" ]; then
+            local trig=$(cat "/run/pi-suspend-led-$lname")
+            echo "$trig" > "$led/trigger" 2>/dev/null
+            rm -f "/run/pi-suspend-led-$lname"
+        fi
+    done
+
     # --- Re-enable WiFi and Bluetooth ---
     rfkill unblock wifi 2>/dev/null
     rfkill unblock bluetooth 2>/dev/null
@@ -181,9 +225,15 @@ resume() {
         logger -t pi-suspend "Display $output on"
     done
 
-    # --- CPU back to ondemand ---
+    # --- CPU: restore max freq, governor, and bring cores back online ---
+    for maxf in /sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq; do
+        [ -f "$maxf" ] && echo 2400000 > "$maxf"
+    done
     for gov in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
         [ -f "$gov" ] && echo ondemand > "$gov"
+    done
+    for cpu in /sys/devices/system/cpu/cpu[1-9]*/online; do
+        [ -f "$cpu" ] && echo 1 > "$cpu"
     done
 
     # --- Resume audio ---
