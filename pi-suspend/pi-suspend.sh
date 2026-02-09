@@ -3,6 +3,8 @@
 # Turns off display, throttles CPU, disables WiFi/BT, powers off USB.
 
 STATE_FILE="/run/pi-suspend-state"
+HIBERNATE_PID_FILE="/run/pi-suspend-hibernate-pid"
+HIBERNATE_TIMEOUT=3600  # seconds (1 hour) before deep hibernate
 
 # Find the active graphical session user and their environment
 find_desktop_user() {
@@ -93,19 +95,17 @@ suspend() {
         [ -f "$bl" ] && echo 1 > "$bl"
     done
 
-    # --- CPU: offline cores 1-3, cap core 0 at minimum ---
-    for cpu in /sys/devices/system/cpu/cpu[1-9]*/online; do
-        [ -f "$cpu" ] && echo 0 > "$cpu"
-    done
+    # --- CPU: cap all cores at minimum frequency in powersave ---
+    # NOTE: Do NOT offline cores — Pi 5 PSCI firmware cannot bring them back (EINVAL)
     for gov in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
         [ -f "$gov" ] && echo powersave > "$gov"
     done
     local min_freq
-    min_freq=$(cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq 2>/dev/null || echo 1500000)
+    min_freq=$(cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq 2>/dev/null || echo 600000)
     for maxf in /sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq; do
         [ -f "$maxf" ] && echo "$min_freq" > "$maxf"
     done
-    logger -t pi-suspend "CPU: 3 cores offline, core 0 capped at ${min_freq}kHz"
+    logger -t pi-suspend "CPU: all cores capped at ${min_freq}kHz powersave"
 
     # --- LEDs off ---
     for led in /sys/class/leds/ACT /sys/class/leds/PWR; do
@@ -162,12 +162,33 @@ suspend() {
     [ -n "$USB_DEAUTHED" ] && echo "$USB_DEAUTHED" > /run/pi-suspend-usb-deauthed
     logger -t pi-suspend "USB: power off hubs 1,2,4; de-authorized:$USB_DEAUTHED"
 
+    # --- Start hibernate timer ---
+    # After HIBERNATE_TIMEOUT seconds of suspend, save session and power off
+    if [ -f "$HIBERNATE_PID_FILE" ]; then
+        pkill -P "$(cat "$HIBERNATE_PID_FILE")" 2>/dev/null
+        kill "$(cat "$HIBERNATE_PID_FILE")" 2>/dev/null
+    fi
+    ( sleep "$HIBERNATE_TIMEOUT" && /usr/local/bin/pi-suspend.sh hibernate ) &
+    echo $! > "$HIBERNATE_PID_FILE"
+    logger -t pi-suspend "Hibernate timer started (${HIBERNATE_TIMEOUT}s)"
+
     touch "$STATE_FILE"
     logger -t pi-suspend "Suspended."
 }
 
 resume() {
     logger -t pi-suspend "Resuming..."
+
+    # --- Cancel hibernate timer ---
+    if [ -f "$HIBERNATE_PID_FILE" ]; then
+        local hpid
+        hpid=$(cat "$HIBERNATE_PID_FILE")
+        pkill -P "$hpid" 2>/dev/null
+        kill "$hpid" 2>/dev/null
+        rm -f "$HIBERNATE_PID_FILE"
+        logger -t pi-suspend "Hibernate timer cancelled"
+    fi
+
     find_desktop_user
     find_drm_outputs
 
@@ -225,15 +246,12 @@ resume() {
         logger -t pi-suspend "Display $output on"
     done
 
-    # --- CPU: restore max freq, governor, and bring cores back online ---
+    # --- CPU: restore max freq and governor ---
     for maxf in /sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq; do
         [ -f "$maxf" ] && echo 2400000 > "$maxf"
     done
     for gov in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
         [ -f "$gov" ] && echo ondemand > "$gov"
-    done
-    for cpu in /sys/devices/system/cpu/cpu[1-9]*/online; do
-        [ -f "$cpu" ] && echo 1 > "$cpu"
     done
 
     # --- Resume audio ---
@@ -242,6 +260,25 @@ resume() {
 
     rm -f "$STATE_FILE"
     logger -t pi-suspend "Resumed."
+}
+
+hibernate() {
+    logger -t pi-suspend "Hibernate: timeout reached, saving session and powering off..."
+    find_desktop_user
+
+    # Save KDE session
+    if [ -n "$DESKTOP_USER" ] && [ -n "$DESKTOP_RUNTIME" ]; then
+        sudo -u "$DESKTOP_USER" \
+            XDG_RUNTIME_DIR="$DESKTOP_RUNTIME" \
+            DBUS_SESSION_BUS_ADDRESS="unix:path=$DESKTOP_RUNTIME/bus" \
+            dbus-send --session --dest=org.kde.ksmserver --type=method_call \
+            /KSMServer org.kde.KSMServerInterface.saveCurrentSession 2>/dev/null
+        logger -t pi-suspend "KDE session saved"
+        sleep 2
+    fi
+
+    rm -f "$STATE_FILE" "$HIBERNATE_PID_FILE"
+    systemctl poweroff
 }
 
 toggle() {
@@ -253,9 +290,10 @@ toggle() {
 }
 
 case "${1:-toggle}" in
-    suspend)  suspend ;;
-    resume)   resume ;;
-    toggle)   toggle ;;
+    suspend)   suspend ;;
+    resume)    resume ;;
+    hibernate) hibernate ;;
+    toggle)    toggle ;;
     status)
         if [ -f "$STATE_FILE" ]; then
             echo "suspended"
@@ -263,5 +301,5 @@ case "${1:-toggle}" in
             echo "active"
         fi
         ;;
-    *)        echo "Usage: $0 {suspend|resume|toggle|status}" ;;
+    *)        echo "Usage: $0 {suspend|resume|hibernate|toggle|status}" ;;
 esac
